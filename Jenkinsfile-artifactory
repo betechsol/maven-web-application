@@ -1,0 +1,93 @@
+pipeline {
+  agent any
+  environment {
+    SCANNER_HOME = tool 'sonar-scanner'
+  }
+  stages {
+    stage('1.Clone') {
+      steps {
+        git branch: 'master', url: 'https://github.com/betechsol/maven-web-application.git'
+      }
+    }
+    stage('2.Test') {
+      steps {
+        withMaven(globalMavenSettingsConfig: '', jdk: 'jdk11', maven: 'maven', mavenSettingsConfig: '', traceability: true) {
+          sh 'mvn test'
+        }
+      }
+    }
+    stage('3.Trivy FS Scan') {
+      steps {
+        sh 'trivy fs --format table -o fs.html .'
+      }
+    }
+    stage('4.Build') {
+      steps {
+        withMaven(globalMavenSettingsConfig: '', jdk: 'jdk11', maven: 'maven', mavenSettingsConfig: '', traceability: true) {
+          sh 'mvn clean package'
+        }
+      }
+    }
+    stage('5.SonarQube Analysis') {
+      steps {
+        withSonarQubeEnv('sonar-server') {
+          sh '''
+          $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=delta-pipeline -Dsonar.projectKey=delta-pipeline \
+          -Dsonar.java.binaries=target
+          '''
+        }
+      }
+    }
+    stage('6.Publish Artifacts') {
+      steps {
+        withMaven(globalMavenSettingsConfig: '', jdk: 'jdk11', maven: 'maven', mavenSettingsConfig: '', traceability: true) {
+          sh 'mvn deploy'
+        }
+      }
+    }
+    stage('7.Upload to Artifactory') {
+      steps {
+        rtServer(
+          id: 'server-1',
+          url: 'http://44.248.247.152:8081/artifactory',
+          credentialsId: 'jfrog-admin',
+          bypassProxy: true,
+          timeout: 300
+        )
+        rtUpload(
+          serverId: 'server-1',
+          spec: '''{
+            "files": [
+              {
+                "pattern": "*war",
+                "target": "delta-pipeline-snapshot"
+              }
+            ]
+          }'''
+        )
+      }
+    }
+    stage('8.Download from Artifactory') {
+      steps {
+        dir('/tmp') {
+          rtDownload(
+            serverId: 'server-1',
+            spec: '''{
+              "files": [
+                {
+                  "pattern": "delta-pipeline-snapshot/",
+                  "target": ""
+                }
+              ]
+            }'''
+          )
+        }
+      }
+    }
+    stage('9.Deploy to Tomcat') {
+      steps {
+        deploy adapters: [tomcat9(alternativeDeploymentContext: '', credentialsId: 'tomcat-admin', path: '', url: 'http://172.31.40.255:8080/')], contextPath: null, war: 'target/*war'
+      }
+    }
+  }
+}
