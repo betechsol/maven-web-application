@@ -18,13 +18,11 @@ pipeline {
         }
       }
     }
-    '''
-    stage('3.Trivy FS Scan') {
-      steps {
-          sh 'trivy fs --format table -o fs.html .'
-      }
-    }
-    '''
+    //stage('3.Trivy FS Scan') {
+    //  steps {
+    //      sh 'trivy fs --format table -o fs.html .'
+    //  }
+    //}
     stage('4.Build'){
       steps {
         withMaven(globalMavenSettingsConfig: '', jdk: 'jdk11', maven: 'maven', mavenSettingsConfig: '', traceability: true) {
