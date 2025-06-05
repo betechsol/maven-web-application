@@ -1,5 +1,7 @@
 pipeline {
-  agent any
+  agent {
+    label 'jenkins-tomcat-node'
+  }
   environment {
         SCANNER_HOME= tool 'sonar-scanner'
     }
